@@ -171,12 +171,12 @@ section.main > div {
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 PROJECTS = [
+    ("👤", "About Me"),
     ("🔄", "Churn Classification"),
     ("🩻", "X-ray Classification"),
     ("📚", "RAG Q&A System"),
     ("🎨", "AI Studio"),
-    ("🤖", "Research Agents"),
-    ("👤", "About Me"),
+    ("🤖", "Research Agents") 
 ]
 
 with st.sidebar:
