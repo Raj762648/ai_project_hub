@@ -8,7 +8,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-FASTAPI_BASE = "http://localhost:8000"
+BASE_URL = "http://localhost:8000"
 
 st.markdown("""
 <style>
@@ -176,7 +176,8 @@ PROJECTS = [
     ("🩻", "X-ray Classification"),
     ("📚", "RAG Q&A System"),
     ("🎨", "AI Studio"),
-    ("🤖", "Research Agents") 
+    ("🤖", "Research Agents"),
+    ("🛠️", "API Testing")
 ]
 
 with st.sidebar:
@@ -202,7 +203,7 @@ with st.sidebar:
 # ── Helper: call FastAPI ──────────────────────────────────────────────────────
 def call_api(endpoint, payload=None):
     try:
-        r = requests.post(f"{FASTAPI_BASE}{endpoint}", json=payload, timeout=8)
+        r = requests.post(f"{BASE_URL}{endpoint}", json=payload, timeout=8)
         return r.json()
     except Exception as e:
         return {"error": str(e), "note": "Start FastAPI server to enable live results"}
@@ -334,6 +335,24 @@ elif page == "About Me":
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+elif page == "API Testing":
+    if st.button("Test Root Endpoint"):
+        try:
+            response = requests.get(f"{BASE_URL}/")
+            st.write("Status Code:", response.status_code)
+            st.json(response.json())
+        except Exception as e:
+            st.error(f"Error: {e}")
+    
+    # Test Health Endpoint
+    if st.button("Test Health Endpoint"):
+        try:
+            response = requests.get(f"{BASE_URL}/health")
+            st.write("Status Code:", response.status_code)
+            st.json(response.json())
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
