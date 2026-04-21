@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+from api import churn_predict, health_check, xray_health_predict
 
 st.set_page_config(
     page_title="AI Portfolio",
@@ -9,6 +10,8 @@ st.set_page_config(
 )
 
 BASE_URL = "http://localhost:8000"
+churn_api_endpoint = "/api/v1/churn_predict"
+xray_api_endpoint = "/api/v1/xray_predict"
 
 st.markdown("""
 <style>
@@ -169,15 +172,15 @@ section.main > div {
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+
 PROJECTS = [
     ("👤", "About Me"),
     ("🔄", "Churn Classification"),
     ("🩻", "X-ray Classification"),
     ("📚", "RAG Q&A System"),
     ("🎨", "AI Studio"),
-    ("🤖", "Research Agents"),
-    ("🛠️", "API Testing")
+    ("🤖", "Research Agents")
 ]
 
 with st.sidebar:
@@ -213,42 +216,90 @@ if page == "Churn Classification":
     st.markdown("""
     <div class="hero-card">
       <div class="hero-title">🔄 Customer Churn <span class="hero-accent">Classification</span></div>
-      <div class="hero-sub">Predict which customers are at risk of leaving using ML models trained on behavioral data</div>
-      <span class="tag">📊 XGBoost</span><span class="tag">🐍 scikit-learn</span><span class="tag">📈 SHAP</span><span class="tag">🔗 FastAPI</span>
+      <div class="hero-sub">Predict which customers are at risk of leaving using ML models trained on behavioral data. XGBoost-based churn prediction system on the Telco dataset, deployed via FastAPI for real-time customer risk scoring.</div>
+      <span class="tag">🧮 NumPy</span><span class="tag">🐼 Pandas</span><span class="tag">📉 Matplotlib</span><span class="tag">📊 XGBoost</span><span class="tag">🐍 scikit-learn</span><span class="tag">🔗 FastAPI</span>
     </div>
     """, unsafe_allow_html=True)
     
-    c1, c2 = st.columns(2)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        tenure = st.slider("Customer Tenure (months)", 1, 72, 24)
-        monthly = st.number_input("Monthly Charges ($)", 20.0, 120.0, 65.0)
+        gender = st.selectbox("Gender", ["Male", "Female"])
+        senior_citizen = st.selectbox("Senior Citizen", ["Yes", "No"])
+        partner = st.selectbox("Partner", ["Yes", "No"])
+        dependents = st.selectbox("Dependents", ["Yes", "No"])
+        tenure = st.number_input("Customer Tenure (Months)",min_value=0 ,max_value=72,step=1)
+
     with c2:
+        phone_service = st.selectbox("Phone Service", ["Yes", "No"])
+        multiple_lines = st.selectbox("Multiple Lines", ["Yes", "No", "No phone service"])
+        internet_service = st.selectbox("Internet Service", ["DSL", "No", "Fiber optic"])
+        online_security = st.selectbox("Online Security", ["Yes", "No"])
+        online_backup = st.selectbox("Online Backup", ["Yes", "No"])
+
+    with c3:
+        device_protection = st.selectbox("Device Protection", ["Yes", "No"])
+        tech_support = st.selectbox("Tech Support", ["Yes", "No"])
+        streaing_tv = st.selectbox("Streaming TV", ["Yes", "No"])
+        streaming_movies = st.selectbox("Streaming Movies", ["Yes", "No"])
         contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-        support = st.selectbox("Tech Support", ["Yes", "No"])
-    
-    st.markdown('<div class="api-section"><span class="api-method">POST</span><span class="api-path">/churn/predict</span></div>', unsafe_allow_html=True)
+
+
+    with c4:
+        paperless_billing = st.selectbox("Paperless Billing", ["Yes", "No"])
+        payment_method = st.selectbox("Payment Method", ["Electronic check", "Mailed check","Bank transfer (automatic)", "Credit card (automatic)"])
+        monthly_charges = st.number_input("Monthly Charges",min_value=15.0 ,max_value=120.0,step=0.1)
+        total_charges = st.number_input("Total Charges",min_value=15.0 ,max_value=9000.0,step=0.1)
     
     if st.button("🔍 Predict Churn Risk", use_container_width=True):
-        result = call_api("/churn/predict", {"tenure": tenure, "monthly_charges": monthly, "contract": contract, "tech_support": support})
-        st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
+        result = churn_predict(churn_api_endpoint, {"gender": gender,"SeniorCitizen": senior_citizen, 
+                                             "Partner": partner, "Dependents": dependents, "tenure": tenure, 
+                                             "PhoneService": phone_service, "MultipleLines": multiple_lines, 
+                                             "InternetService": internet_service, "OnlineSecurity": online_security, 
+                                             "OnlineBackup": online_backup, "DeviceProtection": device_protection, 
+                                             "TechSupport": tech_support, "StreamingTV": streaing_tv, 
+                                             "StreamingMovies": streaming_movies, "Contract": contract, 
+                                             "PaperlessBilling": paperless_billing, "PaymentMethod": payment_method, 
+                                             "MonthlyCharges": monthly_charges, "TotalCharges": total_charges})
+        st.subheader("Prediction Result")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Churn", "No" if not result['churn'] else "Yes")
+        with col2:
+            st.metric("Probability", f"{result['probability']*100:.2f}%")
+        with col3:
+            st.metric("Risk Level", result['risk_level'])
 
 elif page == "X-ray Classification":
     st.markdown("""
     <div class="hero-card">
-      <div class="hero-title">🩻 X-Ray Image <span class="hero-accent">Classification & Report</span></div>
-      <div class="hero-sub">Deep learning model to classify chest X-rays and auto-generate radiological reports using Vision AI</div>
-      <span class="tag">🧠 CNN</span><span class="tag">👁️ Vision AI</span><span class="tag">📄 Report Gen</span><span class="tag">🏥 DICOM</span>
+      <div class="hero-title">🩻 X-Ray Image <span class="hero-accent">Classification</span></div>
+      <div class="hero-sub">MobileNetV2-based X-ray classification system for pneumonia detection, deployed via FastAPI for real-time inference.</div>
+      <span class="tag">🧠 Deep Learning</span><span class="tag">🧱 CNN</span><span class="tag">⚙️ TensorFlow</span><span class="tag">⚙️ TFLite</span><span class="tag">📓 Colab Notebook</span>
     </div>
     """, unsafe_allow_html=True)
 
     uploaded = st.file_uploader("Upload Chest X-Ray Image", type=["jpg", "png", "jpeg"])
-    st.markdown('<div class="api-section"><span class="api-method">POST</span><span class="api-path">/xray/analyze</span></div>', unsafe_allow_html=True)
     
     if uploaded:
         st.image(uploaded, width=300, caption="Uploaded X-Ray")
-        if st.button("🔬 Analyze & Generate Report", use_container_width=True):
-            result = call_api("/xray/analyze", {"filename": uploaded.name})
-            st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
+        if st.button("🔬 Analyze the Image", use_container_width=True):
+            result = xray_health_predict(xray_api_endpoint, uploaded)
+            #st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
+            st.subheader("🩺 X-ray Classification Result")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(label="Prediction", value=result["label"])
+            with col2:
+                st.metric(label="Confidence", value=f"{result['confidence']*100:.2f}%")
+            st.divider()
+            st.subheader("Class Probabilities")
+            col3, col4 = st.columns(2)
+            probs = result["probabilities"]
+            with col3:
+                st.metric(label="NORMAL", value=f"{probs['NORMAL']*100:.2f}%")
+            with col4:
+                st.metric(label="PNEUMONIA",value=f"{probs['PNEUMONIA']*100:.2f}%")
+
     else:
         st.info("📤 Upload an X-ray image to begin analysis")
 
@@ -316,43 +367,30 @@ elif page == "About Me":
       <div style="display:flex;align-items:center;gap:20px;margin-bottom:24px">
         <div style="font-size:4rem">👨‍💻</div>
         <div>
-          <div style="font-size:1.8rem;font-weight:700;color:#fff">AI/ML Engineer</div>
-          <div style="color:#7c83fd;font-size:1rem;margin:4px 0">Building intelligent systems that matter</div>
-          <div style="color:#8892b0;font-size:0.85rem">📍 India &nbsp;|&nbsp; 🏢 Open to opportunities</div>
+          <div style="font-size:1.8rem;font-weight:700;color:#fff">Raj Pal</div>
+          <div style="font-size:1.2rem;font-weight:700;color:#fff">Aspiring AI/ML Engineer</div>
+          <div style="color:#7c83fd;font-size:1rem;margin:4px 0">Focused on building end-to-end machine learning and AI systems — from data preprocessing and model training to scalable deployment.</div>
+          <div style="color:#8892b0;font-size:0.85rem">📍 Dubai, UAE &nbsp;|&nbsp; 🏢 Open to opportunities</div>
         </div>
       </div>
       <hr style="border-color:#2d3561;margin:0 0 20px">
       <div style="color:#8892b0;line-height:1.8;margin-bottom:20px">
-        Passionate AI/ML engineer specializing in end-to-end machine learning systems — from data pipelines and model training to production-ready APIs and interactive UIs. I build solutions that bridge cutting-edge research with real-world impact.
+        I have hands-on experience working with computer vision and language models, along with building APIs and interactive applications using FastAPI and Streamlit. My work centers on taking models beyond experimentation into usable, real-world systems.
       </div>
       <div style="margin-bottom:16px">
         <div style="color:#fff;font-weight:600;margin-bottom:8px">🛠️ Core Stack</div>
-        <span class="tag">Python</span><span class="tag">PyTorch</span><span class="tag">TensorFlow</span><span class="tag">FastAPI</span><span class="tag">LangChain</span><span class="tag">Docker</span><span class="tag">AWS</span><span class="tag">Streamlit</span>
+        <span class="tag">Python</span><span class="tag">Numpy</span><span class="tag">Pandas</span><span class="tag">Matplotlib</span><span class="tag">Seaborn</span><span class="tag">Scikit-learn</span><span class="tag">PyTorch</span><span class="tag">TensorFlow</span><span class="tag">FastAPI</span><span class="tag">LangChain</span><span class="tag">Docker</span><span class="tag">AWS</span>
       </div>
       <div>
         <div style="color:#fff;font-weight:600;margin-bottom:8px">📬 Connect</div>
-        <span class="tag">🔗 LinkedIn</span><span class="tag">🐙 GitHub</span><span class="tag">✉️ Email</span>
+        <a href="https://www.linkedin.com/in/raj-pal-5283171a8/" target="_blank" class="tag">🔗 LinkedIn</a>
+        <a href="https://github.com/Raj762648" target="_blank" class="tag">🐙 GitHub</a>
+        <span class="tag">✉️ rajpal.sdme@gmail.com</span>
+        <span class="tag">📞 +971 582533414</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-elif page == "API Testing":
-    if st.button("Test Root Endpoint"):
-        try:
-            response = requests.get(f"{BASE_URL}/")
-            st.write("Status Code:", response.status_code)
-            st.json(response.json())
-        except Exception as e:
-            st.error(f"Error: {e}")
-    
-    # Test Health Endpoint
-    if st.button("Test Health Endpoint"):
-        try:
-            response = requests.get(f"{BASE_URL}/health")
-            st.write("Status Code:", response.status_code)
-            st.json(response.json())
-        except Exception as e:
-            st.error(f"Error: {e}")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)

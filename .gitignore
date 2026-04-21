@@ -9,6 +9,10 @@ __pycache__/
 #####
 test.ipynb
 
+
+######
+backent/.env 
+
 # Distribution / packaging
 .Python
 build/

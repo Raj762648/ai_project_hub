@@ -1,15 +1,15 @@
-# numpy==2.2.6
-# pandas==2.3.3
-# matplotlib==3.10.8
-# seaborn==0.13.2
-# scikit-learn==1.8.0
-# xgboost==3.1.2
-# boto3==1.42.68
-# mlflow==3.10.1
-# dotenv
-numpy
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.8.0
+xgboost==3.1.2
+boto3==1.42.68
 streamlit==1.52.2
 requests==2.32.5
 fastapi==0.134.0
 uvicorn==0.41.0
+pydantic==2.12.5
+joblib==1.5.3
+ai_edge_litert==2.1.4
+dotenv-python
+
 
