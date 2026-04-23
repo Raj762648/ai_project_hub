@@ -3,24 +3,20 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - main
+      - main  # Trigger on push to main branch
 
 jobs:
   deploy:
-    name: Deploy FastAPI + Streamlit
+    name: Deploy Application
     runs-on: ubuntu-latest
 
     steps:
-      # =========================
-      # 1. Checkout Code
-      # =========================
+      # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # =========================
-      # 2. Deploy via SSH
-      # =========================
-      - name: Deploy to EC2
+      # Step 2: Set up SSH and deploy
+      - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -29,45 +25,27 @@ jobs:
           script: |
             set -e
 
-            echo "=============================="
-            echo "🚀 Starting Deployment"
-            echo "=============================="
-
-            # Navigate to project
+            echo "==> Navigating to app directory"
             cd ${{ secrets.EC2_APP_DIR }}
 
-            echo "📥 Pulling latest code..."
+            echo "==> Pulling latest code"
             git fetch origin main
             git reset --hard origin/main
 
-            echo "🐍 Activating virtual environment..."
+            echo "==> Activating virtual environment"
             source venv/bin/activate
 
-            echo "📦 Installing dependencies..."
+            echo "==> Installing/updating dependencies"
             pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "🔄 Restarting backend service..."
-            sudo systemctl restart ml-backend
+            echo "==> Restarting backend service"
+            sudo systemctl restart fastapi-backend
 
-            echo "🔄 Restarting frontend service..."
-            sudo systemctl restart ml-frontend
+            echo "==> Restarting frontend service"
+            sudo systemctl restart streamlit-frontend
 
-            echo "⏳ Waiting for services to stabilize..."
-            sleep 5
-
-            echo "📊 Checking backend status..."
-            sudo systemctl is-active --quiet ml-backend && echo "✅ Backend OK" || (echo "❌ Backend Failed" && sudo systemctl status ml-backend --no-pager && exit 1)
-
-            echo "📊 Checking frontend status..."
-            sudo systemctl is-active --quiet ml-frontend && echo "✅ Frontend OK" || (echo "❌ Frontend Failed" && sudo systemctl status ml-frontend --no-pager && exit 1)
-
-            echo "🌐 Reloading Nginx..."
-            sudo nginx -t
+            echo "==> Reloading Nginx"
             sudo systemctl reload nginx
 
-            echo "=============================="
-            echo "🎉 Deployment Successful"
-            echo "=============================="
-
-
+            echo "==> Deployment complete ✅"
