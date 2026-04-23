@@ -369,7 +369,7 @@ elif page == "About Me":
         <div>
           <div style="font-size:1.8rem;font-weight:700;color:#fff">Raj Pal</div>
           <div style="font-size:1.2rem;font-weight:700;color:#fff">Aspiring AI/ML Engineer</div>
-          <div style="color:#7c83fd;font-size:1rem;margin:4px 0">Focused on building end-to-end machine learning and AI systems — from data preprocessing and model training to scalable deployment.</div>
+          <div style="color:#7c83fd;font-size:1rem;margin:4px 0">Focused on building end-to-end machine learning and AI systems — from data preprocessing, feature engineering, model training and evaluation to scalable deployment.</div>
           <div style="color:#8892b0;font-size:0.85rem">📍 Dubai, UAE &nbsp;|&nbsp; 🏢 Open to opportunities</div>
         </div>
       </div>
