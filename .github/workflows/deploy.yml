@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - main
+      - main  # Trigger on push to main branch
 
 jobs:
   deploy:
@@ -11,34 +11,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      # Step 1: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Step 2: Set up SSH and deploy
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/ai_project_hub
+            set -e
 
-            echo "Pulling latest code..."
-            git pull origin main
+            echo "==> Navigating to app directory"
+            cd ${{ secrets.EC2_APP_DIR }}
 
-            echo "Activating virtual environment..."
+            echo "==> Pulling latest code"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> Activating virtual environment"
             source venv/bin/activate
 
-            echo "Installing/updating dependencies..."
+            echo "==> Installing/updating dependencies"
+            pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "Restarting FastAPI service..."
-            sudo systemctl restart fastapi
+            echo "==> Restarting backend service"
+            sudo systemctl restart fastapi-backend
 
-            echo "Restarting Streamlit service..."
-            sudo systemctl restart streamlit
+            echo "==> Restarting frontend service"
+            sudo systemctl restart streamlit-frontend
 
-            echo "Reloading Nginx..."
+            echo "==> Reloading Nginx"
             sudo systemctl reload nginx
 
-            echo "Deployment complete!"
+            echo "==> Deployment complete ✅"
