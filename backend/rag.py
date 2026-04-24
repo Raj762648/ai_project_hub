@@ -31,7 +31,7 @@ index = pc.Index(INDEX_NAME)
 
 EMBED_MODEL = "text-embedding-3-small"
 CHAT_MODEL  = "gpt-4o-mini"
-CHUNK_SIZE  = 500
+CHUNK_SIZE  = 600
 TOP_K       = 4
 
 
