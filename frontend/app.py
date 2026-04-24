@@ -342,6 +342,11 @@ elif page == "RAG Q&A System":
             st.session_state.messages = []
             st.rerun()
 
+    # ── Main area — Chat interface ─────────────────────────────────────────────────
+
+    if not st.session_state.pdf_uploaded:
+        st.stop()
+
     # Render all past messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -452,6 +457,6 @@ elif page == "About Me":
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="text-align:center;color:#475569;font-size:0.78rem;padding:16px;border-top:1px solid #2d3561;margin-top:20px">
-⚡ AI Portfolio &nbsp;|&nbsp; 🔗 FastAPI Backend &nbsp;|&nbsp; 🐍 Built with Streamlit &nbsp;|&nbsp; © 2025
+  ⚡ AI Portfolio &nbsp;|&nbsp; 🔗 FastAPI Backend &nbsp;|&nbsp; 🐍 Built with Streamlit &nbsp;|&nbsp; © 2025
 </div>
 """, unsafe_allow_html=True)
