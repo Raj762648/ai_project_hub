@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, validator
+from pydantic_settings import BaseSettings
 from typing import Optional, List
 
 # ── Prediction Request ───────────────────────────────────────────────────────
@@ -43,3 +44,9 @@ class HealthResponse(BaseModel):
     status:      str
     model_ready: bool
     version:     str = "1.0.0"
+
+class ChatRequest(BaseModel):
+    question: str
+    history:  list[dict] = []   # list of {"role": ..., "content": ...} dicts
+    
+

@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
-from api import churn_predict, health_check, xray_health_predict
+import json
+from api import churn_predict, health_check, xray_health_predict, upload_pdf, stream_chat
 
 st.set_page_config(
     page_title="AI Portfolio",
@@ -12,6 +13,9 @@ st.set_page_config(
 BASE_URL = "http://localhost:8000"
 churn_api_endpoint = "/api/v1/churn_predict"
 xray_api_endpoint = "/api/v1/xray_predict"
+ingest_api_endpiont = "/api/v1/pdf_upload"
+response_api_endpoint = "/api/v1/rag_chat"
+
 
 st.markdown("""
 <style>
@@ -311,14 +315,71 @@ elif page == "RAG Q&A System":
       <span class="tag">🔍 Vector DB</span><span class="tag">🦜 LangChain</span><span class="tag">📎 Embeddings</span><span class="tag">💬 LLM</span>
     </div>
     """, unsafe_allow_html=True)
-
-    doc = st.file_uploader("Upload Knowledge Document (PDF / TXT)", type=["pdf", "txt"])
-    question = st.text_input("Ask a question about the document", placeholder="What are the key findings?")
-    st.markdown('<div class="api-section"><span class="api-method">POST</span><span class="api-path">/rag/query</span></div>', unsafe_allow_html=True)
     
-    if st.button("💡 Get Answer", use_container_width=True) and question:
-        result = call_api("/rag/query", {"question": question, "document": doc.name if doc else "default_kb"})
-        st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
+
+    # ── Session state — persists across re-runs ───────────────────────────────────
+    if "messages" not in st.session_state:
+        st.session_state.messages = []   # list of {"role": ..., "content": ...}
+    if "pdf_uploaded" not in st.session_state:
+        st.session_state.pdf_uploaded = False
+
+    uploaded_file = st.file_uploader("Upload Knowledge Document (PDF / TXT)", type=["pdf", "txt"])
+
+    if uploaded_file and not st.session_state.pdf_uploaded:
+        with st.spinner("Processing PDF..."):
+            try:
+                result = upload_pdf(uploaded_file.read(), uploaded_file.name)
+                st.session_state.pdf_uploaded = True
+                st.success(f"✅ {result['message']}")
+                st.info(f"📦 {result['chunks_stored']} chunks stored in Pinecone.")
+            except Exception as e:
+                st.error(f"Upload failed: {e}")
+
+    # Button to reset and upload a new PDF
+    if st.session_state.pdf_uploaded:
+        if st.button("🔄 Upload a different PDF"):
+            st.session_state.pdf_uploaded = False
+            st.session_state.messages = []
+            st.rerun()
+
+    # ── Main area — Chat interface ─────────────────────────────────────────────────
+
+    if not st.session_state.pdf_uploaded:
+        st.stop()
+
+    # Render all past messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat input box at the bottom
+    user_input = st.chat_input("Ask something about your PDF...")
+
+    if user_input:
+        # 1. Show the user's question immediately
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # 2. Stream the assistant's answer token-by-token
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+
+            # Pass the current history (without the just-added user message) to the backend
+            history_for_api = st.session_state.messages[:-1]   # exclude the latest user msg
+
+            for token in stream_chat(user_input, history_for_api):
+                full_response += token
+                # Re-render the growing response with a blinking cursor
+                response_placeholder.markdown(full_response + "▌")
+
+            # Final render without the cursor
+            response_placeholder.markdown(full_response)
+
+        # 3. Save the assistant's complete answer to history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
 
 elif page == "AI Studio":
     st.markdown("""

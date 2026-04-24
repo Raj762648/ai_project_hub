@@ -2,6 +2,7 @@ numpy==2.2.6
 pandas==2.3.3
 scikit-learn==1.8.0
 xgboost==3.1.2
+
 boto3==1.42.68
 streamlit==1.52.2
 requests==2.32.5
@@ -10,8 +11,14 @@ uvicorn==0.41.0
 pydantic==2.12.5
 pydantic-settings==2.2.1
 python-multipart==0.0.9
+
 joblib==1.5.3
 ai_edge_litert==2.1.4
 dotenv-python
+
+openai==2.32.0
+pinecone==8.1.2
+langchain-text-splitters==1.1.0
+pypdf==6.10.2
 
 

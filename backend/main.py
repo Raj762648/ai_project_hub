@@ -1,15 +1,15 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from PIL import Image
 import io
+import json
 from dotenv import load_dotenv
+from rag import store_pdf_in_pinecone, stream_answer
 
-from schema import (
-    ChurnPredictionRequest, ChurnPredictionResponse, XRayOutput,
-    HealthResponse )
+from schema import ChurnPredictionRequest, ChurnPredictionResponse, XRayOutput,HealthResponse, ChatRequest
 from model  import predict_churn, load_churn_model, get_xray_model, xray_predict
 
 load_dotenv(override=True)
@@ -67,7 +67,41 @@ async def xray_predict_api(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
 
+@app.post("/api/v1/pdf_upload")
+async def upload_pdf(file: UploadFile = File(...)):
+    """
+    Accept a PDF file, embed its contents, and store in Pinecone.
+    Returns the number of chunks stored.
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    file_bytes = await file.read()
+    doc_id     = file.filename.replace(" ", "_").replace(".pdf", "")
+
+    num_chunks = store_pdf_in_pinecone(file_bytes, doc_id)
+
+    return {
+        "message":    f"'{file.filename}' processed successfully.",
+        "chunks_stored": num_chunks,
+    }
+
+
+@app.post("/api/v1/rag_chat")
+def chat(request: ChatRequest):
+    """
+    Accept a question + conversation history.
+    Stream back the answer token-by-token using Server-Sent Events.
+    """
+    def event_stream():
+        for token in stream_answer(request.question, request.history):
+            # Send each token as plain text so Streamlit can read it
+            yield token
+
+    return StreamingResponse(event_stream(), media_type="text/plain")
+     
 
 if __name__ == "__main__":
     import uvicorn

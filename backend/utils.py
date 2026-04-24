@@ -12,6 +12,7 @@ S3_DATA_KEY = "churn/data/telco_churn.csv"
 S3_CHURN_MODEL_PREFIX = "churn/models/"
 S3_XRAY_MODEL_PREFIX = "xray/models/"
 
+
 s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
 
 def upload_data_to_s3(filepath):
