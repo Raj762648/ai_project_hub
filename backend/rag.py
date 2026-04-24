@@ -8,13 +8,10 @@ import os
 
 load_dotenv(override=True)
 
-# ── Setup ──────────────────────────────────────────────────────────────────────
-
 client     = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 pc         = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
-# Pinecone v6+: list_indexes() returns objects, not strings
 existing_indexes = [idx.name for idx in pc.list_indexes()]
 if INDEX_NAME not in existing_indexes:
     pc.create_index(
@@ -35,8 +32,6 @@ CHUNK_SIZE  = 600
 TOP_K       = 4
 
 
-# ── Step 1: Extract text from PDF ─────────────────────────────────────────────
-
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     reader = PdfReader(io.BytesIO(file_bytes))
     text = ""
@@ -44,8 +39,6 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
         text += page.extract_text() or ""
     return text
 
-
-# ── Step 2: Split into chunks ──────────────────────────────────────────────────
 
 def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     chunks  = []
@@ -57,18 +50,17 @@ def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
-# ── Step 3: Embed text ─────────────────────────────────────────────────────────
-
 def get_embedding(text: str) -> list[float]:
     response = client.embeddings.create(input=text, model=EMBED_MODEL)
     return response.data[0].embedding
 
 
-# ── Step 4: Store PDF in Pinecone ──────────────────────────────────────────────
-
+# ── SINGLE definition with delete_all ─────────────────────────────────────────
 def store_pdf_in_pinecone(file_bytes: bytes, doc_id: str) -> int:
     text   = extract_text_from_pdf(file_bytes)
     chunks = split_into_chunks(text)
+
+    index.delete(delete_all=True)   # ← wipe old vectors first
 
     vectors = []
     for i, chunk in enumerate(chunks):
@@ -85,8 +77,6 @@ def store_pdf_in_pinecone(file_bytes: bytes, doc_id: str) -> int:
     return len(chunks)
 
 
-# ── Step 5: Retrieve relevant chunks ──────────────────────────────────────────
-
 def retrieve_context(question: str) -> str:
     question_embedding = get_embedding(question)
     results = index.query(
@@ -98,8 +88,6 @@ def retrieve_context(question: str) -> str:
         match["metadata"]["text"] for match in results["matches"]
     )
 
-
-# ── Step 6: Stream answer ──────────────────────────────────────────────────────
 
 def stream_answer(question: str, history: list[dict]):
     context = retrieve_context(question)
