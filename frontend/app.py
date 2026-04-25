@@ -342,10 +342,7 @@ elif page == "RAG Q&A System":
             st.session_state.messages = []
             st.rerun()
 
-    # ── Main area — Chat interface ─────────────────────────────────────────────────
-
-    if not st.session_state.pdf_uploaded:
-        st.stop()
+    # ── Main area — Chat interface ────────────────────────────────────────────────
 
     # Render all past messages
     for message in st.session_state.messages:

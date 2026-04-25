@@ -2,6 +2,7 @@
 from pypdf import PdfReader
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
+from pinecone.exceptions import NotFoundException
 from dotenv import load_dotenv
 import io
 import os
@@ -55,24 +56,37 @@ def get_embedding(text: str) -> list[float]:
     return response.data[0].embedding
 
 
-# ── SINGLE definition with delete_all ─────────────────────────────────────────
 def store_pdf_in_pinecone(file_bytes: bytes, doc_id: str) -> int:
-    text   = extract_text_from_pdf(file_bytes)
+    text = extract_text_from_pdf(file_bytes)
     chunks = split_into_chunks(text)
 
-    index.delete(delete_all=True)   # ← wipe old vectors first
+    namespace = "default"
+
+    # 🔥 IMPORTANT FIX: specify namespace explicitly
+    try:
+        index.delete(delete_all=True, namespace=namespace)
+    except Exception as e:
+        print("Delete warning:", e)
 
     vectors = []
     for i, chunk in enumerate(chunks):
         embedding = get_embedding(chunk)
+
         vectors.append({
-            "id":       f"{doc_id}_{i}",
-            "values":   embedding,
-            "metadata": {"text": chunk, "doc": doc_id},
+            "id": f"{doc_id}_{i}",
+            "values": embedding,
+            "metadata": {
+                "text": chunk,
+                "doc": doc_id
+            }
         })
 
+    # upsert in same namespace
     for i in range(0, len(vectors), 100):
-        index.upsert(vectors=vectors[i : i + 100])
+        index.upsert(
+            vectors=vectors[i:i + 100],
+            namespace=namespace   # 🔥 MUST match delete
+        )
 
     return len(chunks)
 
