@@ -55,8 +55,8 @@ _llm = ChatOpenAI(
 # ✅ FIXED: use modern Pinecone vectorstore
 _index = _pc.Index(INDEX_NAME)
 
-_vector_store = PineconeVectorStore(
-    index=_index,
+_vector_store = PineconeVectorStore.from_existing_index(
+    index_name=INDEX_NAME,
     embedding=_embeddings,
     namespace=NAMESPACE,
 )
