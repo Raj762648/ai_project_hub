@@ -316,7 +316,6 @@ elif page == "RAG Q&A System":
     </div>
     """, unsafe_allow_html=True)
     
-
     # ── Session state — persists across re-runs ───────────────────────────────────
     if "messages" not in st.session_state:
         st.session_state.messages = []   # list of {"role": ..., "content": ...}

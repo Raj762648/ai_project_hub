@@ -1,21 +1,38 @@
-# backend/rag.py
-from pypdf import PdfReader
-from openai import OpenAI
-from pinecone import Pinecone, ServerlessSpec
-from pinecone.exceptions import NotFoundException
-from dotenv import load_dotenv
-import io
+from __future__ import annotations
 import os
+import tempfile
+from typing import Generator
+
+from dotenv import load_dotenv
+
+# ── LangChain v1 imports ────────────────────────────────────────────────────
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_core.documents import Document
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# ── Pinecone (direct SDK for index management only) ─────────────────────────
+from pinecone import Pinecone, ServerlessSpec
 
 load_dotenv(override=True)
 
-client     = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-pc         = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+# ── Configuration ────────────────────────────────────────────────────────────
+INDEX_NAME  = os.environ["PINECONE_INDEX_NAME"]
+NAMESPACE   = "default"
+EMBED_MODEL = "text-embedding-3-small"
+CHAT_MODEL  = "gpt-4o-mini"
+TOP_K       = 6   # MMR candidate pool; final answer uses best k=4
 
-existing_indexes = [idx.name for idx in pc.list_indexes()]
-if INDEX_NAME not in existing_indexes:
-    pc.create_index(
+# ── Pinecone index bootstrap ─────────────────────────────────────────────────
+_pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+
+if INDEX_NAME not in [idx.name for idx in _pc.list_indexes()]:
+    _pc.create_index(
         name=INDEX_NAME,
         dimension=1536,
         metric="cosine",
@@ -25,106 +42,151 @@ if INDEX_NAME not in existing_indexes:
         ),
     )
 
-index = pc.Index(INDEX_NAME)
+# ── LangChain components ─────────────────────────────────────────────────────
+_embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
 
-EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL  = "gpt-4o-mini"
-CHUNK_SIZE  = 600
-TOP_K       = 4
+_llm = ChatOpenAI(
+    model=CHAT_MODEL,
+    temperature=0,       # deterministic, fact-grounded answers
+    streaming=True,
+)
+
+_vector_store = PineconeVectorStore(
+    index_name=INDEX_NAME,
+    embedding=_embeddings,
+    namespace=NAMESPACE,
+)
+
+# Maximal Marginal Relevance reduces repetitive chunks from the same passage
+_retriever = _vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={
+        "k": 4,             # chunks returned to the prompt
+        "fetch_k": TOP_K * 3,
+        "lambda_mult": 0.7, # 0 = max diversity · 1 = max relevance
+    },
+)
+
+# ── Text splitter ─────────────────────────────────────────────────────────────
+_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=150,                              # wider overlap = fewer cut sentences
+    separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""],
+    length_function=len,
+)
+
+# ── System prompt ─────────────────────────────────────────────────────────────
+_SYSTEM = """\
+You are a thorough document analyst. Your ONLY knowledge source is the PDF \
+excerpts in <context>. Generate comprehensive, well-structured Markdown \
+answers — every statement must be grounded in the provided excerpts.
+
+## Formatting
+- **Structure**: Open with a `###` title, use `####` sections and `#####` sub-sections
+- **Emphasis**: `**bold**` key terms/figures, `*italics*` for definitions
+- **Lists**: bullets (`-`) for 3+ related items, numbered (`1.`) for sequences
+- **Technical values**: wrap in `backticks`
+- **Direct quotes**: `> "phrase" — [Excerpt N]` blockquote format
+- **End**: `---` divider then a `### Summary` of 3–5 sentences
+
+## Content
+- **Exhaust the context**: extract every relevant detail — elaborate, don't truncate
+- **Cite everything**: bold inline citations after each claim — **[Excerpt 2]** or **[Excerpt 1][Excerpt 3]**
+- **Missing info**: write *"That information is not available in the uploaded document."* — never guess
+- **Multi-part questions**: each sub-question gets its own `##` heading; mark unanswerable ones explicitly
+- **Contradictions**: surface them under a `### ⚠️ Conflicting Information` sub-section
+- **Never invent**: no names, numbers, dates, or facts beyond what the excerpts state
+
+<context>
+{context}
+</context>"""
+
+_prompt = ChatPromptTemplate.from_messages([
+    ("system", _SYSTEM),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{question}"),
+])
 
 
-def extract_text_from_pdf(file_bytes: bytes) -> str:
-    reader = PdfReader(io.BytesIO(file_bytes))
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
-    return text
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _format_docs(docs: list[Document]) -> str:
+    """Render retrieved chunks with numbered separators so the LLM can cite them."""
+    return "\n\n---\n\n".join(
+        f"[Excerpt {i}]\n{doc.page_content.strip()}"
+        for i, doc in enumerate(docs, 1)
+    )
 
 
-def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
-    chunks  = []
-    overlap = 50
-    start   = 0
-    while start < len(text):
-        chunks.append(text[start : start + chunk_size])
-        start += chunk_size - overlap
-    return chunks
+def _to_lc_messages(history: list[dict]) -> list[HumanMessage | AIMessage]:
+    """Convert plain {"role": ..., "content": ...} dicts to LangChain message objects."""
+    mapping = {"user": HumanMessage, "assistant": AIMessage}
+    return [
+        mapping[msg["role"]](content=msg["content"])
+        for msg in history
+        if msg.get("role") in mapping
+    ]
 
 
-def get_embedding(text: str) -> list[float]:
-    response = client.embeddings.create(input=text, model=EMBED_MODEL)
-    return response.data[0].embedding
-
+# ── Public API ────────────────────────────────────────────────────────────────
 
 def store_pdf_in_pinecone(file_bytes: bytes, doc_id: str) -> int:
-    text = extract_text_from_pdf(file_bytes)
-    chunks = split_into_chunks(text)
+    """
+    Ingest *file_bytes* as a PDF into Pinecone.
 
-    namespace = "default"
+    Steps:
+      1. Write bytes to a temp file (PyPDFLoader needs a path).
+      2. Load page-by-page with PyPDFLoader (preserves page metadata).
+      3. Split with RecursiveCharacterTextSplitter.
+      4. Clear the namespace, then upsert all chunks.
 
-    # 🔥 IMPORTANT FIX: specify namespace explicitly
+    Returns the number of chunks stored.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
     try:
-        index.delete(delete_all=True, namespace=namespace)
-    except Exception as e:
-        print("Delete warning:", e)
+        loader = PyPDFLoader(tmp_path, mode="page")   # one Document per page
+        pages  = loader.load()
+    finally:
+        os.unlink(tmp_path)
 
-    vectors = []
-    for i, chunk in enumerate(chunks):
-        embedding = get_embedding(chunk)
+    # Tag every chunk so you can filter by document later
+    for page in pages:
+        page.metadata["doc"] = doc_id
 
-        vectors.append({
-            "id": f"{doc_id}_{i}",
-            "values": embedding,
-            "metadata": {
-                "text": chunk,
-                "doc": doc_id
-            }
-        })
+    chunks = _splitter.split_documents(pages)
 
-    # upsert in same namespace
-    for i in range(0, len(vectors), 100):
-        index.upsert(
-            vectors=vectors[i:i + 100],
-            namespace=namespace   # 🔥 MUST match delete
-        )
+    # Wipe existing vectors before storing the new document
+    try:
+        _pc.Index(INDEX_NAME).delete(delete_all=True, namespace=NAMESPACE)
+    except Exception as exc:
+        print(f"[store_pdf] namespace clear warning: {exc}")
 
+    _vector_store.add_documents(chunks)
     return len(chunks)
 
 
-def retrieve_context(question: str) -> str:
-    question_embedding = get_embedding(question)
-    results = index.query(
-        vector=question_embedding,
-        top_k=TOP_K,
-        include_metadata=True,
-    )
-    return "\n\n".join(
-        match["metadata"]["text"] for match in results["matches"]
-    )
+def stream_answer(question: str, history: list[dict]) -> Generator[str, None, None]:
+    """
+    Retrieve the most relevant chunks for *question*, build a grounded prompt
+    with conversation *history*, and stream the answer token-by-token.
 
+    *history* format: [{"role": "user"|"assistant", "content": "..."}]
+    """
+    lc_history = _to_lc_messages(history)
 
-def stream_answer(question: str, history: list[dict]):
-    context = retrieve_context(question)
-
-    system_message = {
-        "role": "system",
-        "content": (
-            "You are a helpful assistant that answers questions strictly based "
-            "on the provided PDF context. If the answer is not in the context, "
-            "say you don't know.\n\n"
-            f"PDF Context:\n{context}"
-        ),
-    }
-
-    messages = [system_message] + history + [{"role": "user", "content": question}]
-
-    response = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=messages,
-        stream=True,
+    # LCEL chain: retrieve → format → prompt → LLM → parse
+    chain = (
+        {
+            "context":  _retriever | _format_docs,
+            "question": RunnablePassthrough(),
+            "history":  RunnableLambda(lambda _: lc_history),
+        }
+        | _prompt
+        | _llm
+        | StrOutputParser()
     )
 
-    for chunk in response:
-        token = chunk.choices[0].delta.content
-        if token:
-            yield token
+    yield from chain.stream(question)
