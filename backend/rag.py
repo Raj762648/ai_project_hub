@@ -12,10 +12,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
+from langchain_community.vectorstores import Pinecone as PineconeVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# ── Pinecone (direct SDK for index management only) ─────────────────────────
+# ── Pinecone ────────────────────────────────────────────────────────
 from pinecone import Pinecone, ServerlessSpec
 
 load_dotenv(override=True)
@@ -25,12 +25,14 @@ INDEX_NAME  = os.environ["PINECONE_INDEX_NAME"]
 NAMESPACE   = "default"
 EMBED_MODEL = "text-embedding-3-small"
 CHAT_MODEL  = "gpt-4o-mini"
-TOP_K       = 6   # MMR candidate pool; final answer uses best k=4
+TOP_K       = 6
 
 # ── Pinecone index bootstrap ─────────────────────────────────────────────────
 _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
 
-if INDEX_NAME not in [idx.name for idx in _pc.list_indexes()]:
+existing_indexes = [idx.name for idx in _pc.list_indexes()]
+
+if INDEX_NAME not in existing_indexes:
     _pc.create_index(
         name=INDEX_NAME,
         dimension=1536,
@@ -46,11 +48,12 @@ _embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
 
 _llm = ChatOpenAI(
     model=CHAT_MODEL,
-    temperature=0,       # deterministic, fact-grounded answers
+    temperature=0,
     streaming=True,
 )
 
-_vector_store = PineconeVectorStore(
+# ✅ FIXED: use modern Pinecone vectorstore
+_vector_store = PineconeVectorStore.from_existing_index(
     index_name=INDEX_NAME,
     embedding=_embeddings,
     namespace=NAMESPACE,
