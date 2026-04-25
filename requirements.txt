@@ -28,6 +28,7 @@ langchain-core==1.3.2
 langchain-community==0.4.1
 langchain-openai==1.2.1
 langchain-text-splitters==1.1.0
+langchain-pinecone
 
 # Vector DB (FIXED)
 pinecone==7.0.0
