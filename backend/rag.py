@@ -12,22 +12,20 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Pinecone as PineconeVectorStore
+from langchain_pinecone import PineconeVectorStore          # ✅ modern package
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-# ── Pinecone ────────────────────────────────────────────────────────
 from pinecone import Pinecone, ServerlessSpec
 
 load_dotenv(override=True)
 
-# ── Configuration ────────────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 INDEX_NAME  = os.environ["PINECONE_INDEX_NAME"]
 NAMESPACE   = "default"
 EMBED_MODEL = "text-embedding-3-small"
 CHAT_MODEL  = "gpt-4o-mini"
 TOP_K       = 6
 
-# ── Pinecone index bootstrap ─────────────────────────────────────────────────
+# ── Pinecone index bootstrap ──────────────────────────────────────────────────
 _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
 
 existing_indexes = [idx.name for idx in _pc.list_indexes()]
@@ -43,7 +41,7 @@ if INDEX_NAME not in existing_indexes:
         ),
     )
 
-# ── LangChain components ─────────────────────────────────────────────────────
+# ── LangChain components ──────────────────────────────────────────────────────
 _embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
 
 _llm = ChatOpenAI(
@@ -52,11 +50,11 @@ _llm = ChatOpenAI(
     streaming=True,
 )
 
-# ✅ FIXED: use modern Pinecone vectorstore
+# ✅ Pass the Index instance directly — no more from_existing_index()
 _index = _pc.Index(INDEX_NAME)
 
-_vector_store = PineconeVectorStore.from_existing_index(
-    index_name=INDEX_NAME,
+_vector_store = PineconeVectorStore(
+    index=_index,                   # pinecone.Index instance ✅
     embedding=_embeddings,
     namespace=NAMESPACE,
 )
