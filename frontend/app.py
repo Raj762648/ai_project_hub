@@ -1,7 +1,10 @@
 import streamlit as st
 import requests
 import json
+import uuid
+
 from api import churn_predict, health_check, xray_health_predict, upload_pdf, stream_chat
+from api import run_research, get_history, clear_history, health_check, APIError
 
 st.set_page_config(
     page_title="AI Portfolio",
@@ -183,7 +186,6 @@ PROJECTS = [
     ("🔄", "Churn Classification"),
     ("🩻", "X-ray Classification"),
     ("📚", "RAG Q&A System"),
-    ("🎨", "AI Studio"),
     ("🤖", "Research Agents")
 ]
 
@@ -376,25 +378,6 @@ elif page == "RAG Q&A System":
         # 3. Save the assistant's complete answer to history
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-
-elif page == "AI Studio":
-    st.markdown("""
-    <div class="hero-card">
-      <div class="hero-title">🎨 AI Studio <span class="hero-accent">Content Generation</span></div>
-      <div class="hero-sub">Multi-modal AI content creation — generate text, images, code, and marketing copy from prompts</div>
-      <span class="tag">✍️ GPT-4</span><span class="tag">🖼️ DALL-E</span><span class="tag">💻 Codegen</span><span class="tag">📢 Copywriting</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    mode = st.selectbox("Content Type", ["📝 Blog Post", "📢 Ad Copy", "💻 Code Snippet", "📧 Email Campaign"])
-    prompt = st.text_area("Describe what you want to generate", placeholder="Write a product launch blog post for an AI analytics tool...", height=100)
-    tone = st.select_slider("Tone", ["Formal", "Neutral", "Casual", "Witty"])
-    st.markdown('<div class="api-section"><span class="api-method">POST</span><span class="api-path">/studio/generate</span></div>', unsafe_allow_html=True)
-    
-    if st.button("✨ Generate Content", use_container_width=True) and prompt:
-        result = call_api("/studio/generate", {"type": mode, "prompt": prompt, "tone": tone})
-        st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
-
 elif page == "Research Agents":
     st.markdown("""
     <div class="hero-card">
@@ -404,19 +387,73 @@ elif page == "Research Agents":
     </div>
     """, unsafe_allow_html=True)
 
-    topic = st.text_input("Research Topic", placeholder="Latest advances in quantum computing 2024")
-    c1, c2 = st.columns(2)
-    with c1:
-        depth = st.select_slider("Research Depth", ["Quick", "Standard", "Deep"])
-    with c2:
-        sources = st.multiselect("Sources", ["ArXiv", "News", "Wikipedia", "GitHub"], default=["ArXiv", "News"])
-    
-    st.markdown('<div class="api-section"><span class="api-method">POST</span><span class="api-path">/agents/research</span></div>', unsafe_allow_html=True)
-    
-    if st.button("🚀 Launch Research Agent", use_container_width=True) and topic:
-        with st.spinner("🔍 Agents working autonomously..."):
-            result = call_api("/agents/research", {"topic": topic, "depth": depth, "sources": sources})
-        st.markdown(f'<div class="response-box">{result}</div>', unsafe_allow_html=True)
+    # --- Initialize session state ---
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
+    if "history" not in st.session_state:   # ✅ ADD THIS
+        st.session_state.history = []
+
+    # --- Create two columns ---
+    col1, col2 = st.columns([1, 2])  # adjust width ratio as needed
+
+    # -------- LEFT: Session --------
+    with col1:
+        st.header("Session")
+        session_id = st.session_state.get("session_id", "")
+
+        if session_id:
+            st.code(session_id[:20] + "…", language=None)
+        else:
+            st.code("No session", language=None)
+
+        backend_ok = health_check()
+        st.markdown(f"Backend: {'🟢 Online' if backend_ok else '🔴 Offline'}")
+
+        if st.button("🗑️ Clear history"):
+            clear_history(st.session_state.session_id)
+            st.session_state.history = []
+            st.success("Cleared.")
+
+    # -------- RIGHT: Tools --------
+    with col2:
+        st.header("Agent Tools")
+
+        st.markdown(
+        """
+        1. `search_arxiv` — find papers  
+        2. `fetch_paper_text` — read PDFs  
+        3. `index_papers` — embed into FAISS  
+        4. `semantic_search` — retrieve chunks  
+        5. `synthesize_summary` — final answer
+        """
+        )
+
+    # ── Input ─────────────────────────────────────────────────────────
+    query = st.text_input("Research topic", placeholder="e.g. transformer attention mechanisms")
+
+    if st.button("🔍 Research", type="primary", disabled=not backend_ok) and query.strip():
+        with st.spinner("Agent is running… (30–90s on t2.micro)"):
+            try:
+                data = run_research(query.strip(), st.session_state.session_id)
+                st.session_state.history.append({
+                    "query": data["query"],
+                    "response": data["response"],
+                    "steps": data.get("steps", []),
+            })
+            except APIError as e:
+                st.error(str(e))
+
+    # ── Results ───────────────────────────────────────────────────────
+    for turn in reversed(st.session_state.history):
+        st.divider()
+        st.subheader(f"🔎 {turn['query']}")
+
+        if turn.get("steps"):
+            with st.expander("🤖 Agent reasoning steps"):
+                for step in turn["steps"]:
+                    st.markdown(step)
+
+        st.markdown(turn["response"])
 
 elif page == "About Me":
     st.markdown("""

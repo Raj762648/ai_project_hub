@@ -32,6 +32,7 @@ langchain-pinecone
 
 # Vector DB (FIXED)
 pinecone==7.0.0
+faiss-cpu==1.11.0
 
 # Document processing
 pypdf==6.10.2

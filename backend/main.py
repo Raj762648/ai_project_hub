@@ -1,16 +1,22 @@
 import os
+import uuid
+import io
+import json
 import logging
+import uvicorn
+from PIL import Image
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from PIL import Image
-import io
-import json
 from dotenv import load_dotenv
+
+from schema import (ChurnPredictionRequest, ChurnPredictionResponse, 
+                    XRayOutput,HealthResponse, ChatRequest, ResearchRequest, 
+                    ResearchResponse, HistoryResponse, HistoryEntry)
+from model  import predict_churn, load_churn_model, get_xray_model, xray_predict
+from agents import run_research_agent, get_raw_history, clear_session
 from rag import store_pdf_in_pinecone, stream_answer
 
-from schema import ChurnPredictionRequest, ChurnPredictionResponse, XRayOutput,HealthResponse, ChatRequest
-from model  import predict_churn, load_churn_model, get_xray_model, xray_predict
 
 load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
@@ -101,6 +107,50 @@ def chat(request: ChatRequest):
             yield token
 
     return StreamingResponse(event_stream(), media_type="text/plain")
+
+
+@app.post("/api/v1/research", response_model=ResearchResponse)
+def run_agent(req: ResearchRequest):
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+    session_id = req.session_id or str(uuid.uuid4())
+    try:
+        answer, steps = run_research_agent(req.query, session_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return ResearchResponse(session_id=session_id, query=req.query, response=answer, steps=steps)
+
+
+@app.get("/api/v1/get_history/{session_id}", response_model=HistoryResponse)
+def get_history(session_id: str):
+    history = get_raw_history(session_id)
+    return HistoryResponse(session_id=session_id, history=[HistoryEntry(**h) for h in history])
+
+
+@app.delete("/api/v1/del_history/{session_id}")
+def delete_history(session_id: str):
+    clear_session(session_id)
+    return {"message": f"Session '{session_id}' cleared."}
+
+@app.get("/api/v1/agent_health")
+def health():
+    return {"status": "ok"}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
      
 
 if __name__ == "__main__":
@@ -111,4 +161,7 @@ if __name__ == "__main__":
         port=int(os.getenv("API_PORT", 8000)),
         reload=False,
     )
+
+
+
 

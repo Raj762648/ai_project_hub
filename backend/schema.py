@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional, List
 
 # ── Prediction Request ───────────────────────────────────────────────────────
@@ -48,5 +48,26 @@ class HealthResponse(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     history:  list[dict] = []   # list of {"role": ..., "content": ...} dicts
-    
 
+
+class ResearchRequest(BaseModel):
+    query: str
+    session_id: str | None = None
+
+
+class ResearchResponse(BaseModel):
+    session_id: str
+    query: str
+    response: str
+    steps: list[str] = Field(default_factory=list)
+
+
+class HistoryEntry(BaseModel):
+    query: str
+    response: str
+    timestamp: str
+
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    history: list[HistoryEntry]

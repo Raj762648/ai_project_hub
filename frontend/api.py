@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BACKEND_URL = "http://localhost:8000"
+TIMEOUT = 180  # PDF fetching + LLM calls are slow on t2.micro
 
 
 def churn_predict(endpoint,features: dict) -> dict:
@@ -51,3 +52,46 @@ def stream_chat(question: str, history: list[dict]):
         for chunk in response.iter_content(chunk_size=None):
             if chunk:
                 yield chunk.decode("utf-8")
+
+
+class APIError(Exception):
+    pass
+
+
+def run_research(query: str, session_id: str) -> dict:
+    """POST /research → {session_id, query, response, steps}"""
+    try:
+        resp = requests.post(
+            f"{BACKEND_URL}/api/v1/research",
+            json={"query": query, "session_id": session_id},
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.Timeout:
+        raise APIError("Request timed out — please retry.")
+    except requests.exceptions.ConnectionError:
+        raise APIError("Cannot connect to backend. Is it running on port 8000?")
+    except requests.exceptions.HTTPError:
+        raise APIError(f"Backend error {resp.status_code}: {resp.json().get('detail', 'unknown')}")
+
+
+def get_history(session_id: str) -> list[dict]:
+    try:
+        return requests.get(f"{BACKEND_URL}/api/v1/get_history/{session_id}", timeout=10).json().get("history", [])
+    except Exception:
+        return []
+
+
+def clear_history(session_id: str) -> bool:
+    try:
+        return requests.delete(f"{BACKEND_URL}/api/v1/del_history/{session_id}", timeout=10).ok
+    except Exception:
+        return False
+    
+def health_check() -> bool:
+    try:
+        return requests.get(f"{BACKEND_URL}/api/v1/agent_health", timeout=5).ok
+    except Exception:
+        return False
+
