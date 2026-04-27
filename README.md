@@ -7,7 +7,7 @@ The platform combines:
 - Tabular ML (Customer Churn Classification)
 - Computer Vision (Pneumonia X-ray Classification)
 - Retrieval-Augmented Generation (RAG) for document QA
-- Research Agent for automated paper discovery and summarization
+- Research Agent for automated research paper discovery and summarization
 
 ---
 
@@ -111,23 +111,18 @@ Continuous Integration and Deployment implemented using **GitHub Actions**.
 
 ## 📁 Project Structure
 ```
-.
-├── frontend/
-│   └── streamlit_app.py
 ├── backend/
 │   ├── main.py (FastAPI entry point)
-│   ├── routes/
-│   ├── services/
-│   └── models/
-├── rag/
-│   ├── ingestion.py
-│   ├── retriever.py
-│   └── qa_chain.py
-├── research_agent/
-│   ├── agent.py
-│   └── utils.py
-├── nginx/
-│   └── nginx.conf
+│   ├── model.py
+│   ├── rag.py
+│   ├── agents.py
+│   ├── schema.py
+│   ├── utils.py
+│    
+├── frontend/
+│   └── api.py
+│   └── app.py
+│ 
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml
@@ -141,8 +136,8 @@ Continuous Integration and Deployment implemented using **GitHub Actions**.
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/your-username/ai-platform.git
-cd ai-platform
+git https://github.com/Raj762648/ai_project_hub.git
+cd ai_project_hub
 ```
 
 ### 2. Create Virtual Environment
@@ -164,7 +159,7 @@ uvicorn backend.main:app --reload
 
 ### 5. Run Frontend (Streamlit)
 ```bash
-streamlit run frontend/streamlit_app.py
+streamlit run frontend/app.py
 ```
 
 ---
@@ -173,53 +168,8 @@ streamlit run frontend/streamlit_app.py
 
 - Hosted on AWS EC2 (t2.micro)
 - Nginx used as reverse proxy to route:
-  - `/api` → FastAPI backend
-  - `/` → Streamlit frontend
-- Public access via EC2 public IP / domain
+  - → FastAPI backend
+  - → Streamlit frontend
+- Public access via EC2 public IP --> http://100.30.172.223/
 
 ---
-
-## 📊 Results & Performance
-
-### Customer Classification
-- Accuracy: [INSERT]
-- F1 Score: [INSERT]
-
-### X-ray Classification
-- Phase 2 Accuracy: [INSERT]
-- F1 Score: [INSERT]
-
-### RAG System
-- Retrieval Accuracy: [INSERT]
-- Response Latency: [INSERT]
-
----
-
-## 🔐 Environment Variables
-Create a `.env` file:
-```
-OPENAI_API_KEY=[YOUR_KEY]
-PINECONE_API_KEY=[YOUR_KEY]
-PINECONE_ENV=[YOUR_ENV]
-```
-
----
-
-## 🔮 Future Improvements
-- Add authentication (JWT-based)
-- Kubernetes deployment for scalability
-- Caching layer for faster RAG responses
-- Monitoring with Prometheus + Grafana
-
----
-
-## 👨‍💻 Author
-- Name: [YOUR_NAME]
-- GitHub: [YOUR_GITHUB]
-- LinkedIn: [YOUR_LINKEDIN]
-
----
-
-## 📜 License
-This project is licensed under the MIT License.
-

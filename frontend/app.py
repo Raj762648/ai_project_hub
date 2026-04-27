@@ -382,8 +382,8 @@ elif page == "Research Agents":
     st.markdown("""
     <div class="hero-card">
       <div class="hero-title">🤖 Autonomous <span class="hero-accent">Research Agents</span></div>
-      <div class="hero-sub">Multi-agent framework that autonomously searches, reads, synthesizes and summarizes research on any topic</div>
-      <span class="tag">🕸️ Web Search</span><span class="tag">🧩 LangGraph</span><span class="tag">📑 Summarizer</span><span class="tag">🔗 Multi-Agent</span>
+      <div class="hero-sub">Multi-agent framework that autonomously searches, reads, synthesizes and summarizes research papers on any topic</div>
+      <span class="tag">🕸️ Web Search</span><span class="tag">🧩 LangChain</span><span class="tag">📑 Summarizer</span><span class="tag">🔗 Multi-Agent</span>
     </div>
     """, unsafe_allow_html=True)
 
